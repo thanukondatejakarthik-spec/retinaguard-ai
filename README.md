@@ -38,3 +38,19 @@ A full-stack, clinical-grade medical decision support system designed to bring a
    - Express backend with `/api/analyze-retina`, `/api/health`, and `/api/model/status`.
    - Native multimodal vision inference via `@google/genai` (Gemini 2.5 Flash).
    - Complete standalone Python FastAPI + PyTorch + Grad-CAM microservice reference in `/backend/`.
+
+---
+
+## 🚀 Production Deployment (Vercel & Custom Domains)
+
+### Authorizing Domains in Firebase Authentication
+Google OAuth requires verifying the domains allowed to initiate authentication. When deploying to Vercel:
+
+1. Open your Firebase Console:
+   **[Firebase Console Authentication Settings](https://console.firebase.google.com/project/avid-sunspot-pghtt/authentication/settings)**
+2. Scroll to the **Authorized domains** section.
+3. Click **Add domain**.
+4. Add `vercel.app` (this single entry authorizes all preview and production deployments under `*.vercel.app`, such as `retinaguard-ai-dyd4.vercel.app`).
+5. (Optional) If using a custom domain (e.g. `retinaguard.org`), add it here as well.
+
+> **Note**: While domain authorization propagates, or if accessing from restricted preview frames, the application provides an instant **1-Click Clinician** mode giving full access to all Gemini AI vision, compression, and report generation features.

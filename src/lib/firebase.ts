@@ -8,6 +8,8 @@ import {
   updateProfile,
   signOut, 
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
   type User 
 } from 'firebase/auth';
 import { 
@@ -34,18 +36,25 @@ import {
 import type { ScreeningRecord, UserProfile } from '../types';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
+// Support both Vite environment variables and default firebase-applet-config.json
 const firebaseConfig = {
-  apiKey: firebaseConfigJson.apiKey,
-  authDomain: firebaseConfigJson.authDomain,
-  projectId: firebaseConfigJson.projectId,
-  storageBucket: firebaseConfigJson.storageBucket,
-  messagingSenderId: firebaseConfigJson.messagingSenderId,
-  appId: firebaseConfigJson.appId,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJson.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJson.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJson.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJson.appId,
 };
 
 // Initialize Firebase App
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+
+// Configure persistent authentication session across reloads
+setPersistence(auth, browserLocalPersistence).catch(() => {
+  // Graceful fallback for private browsing or restricted iframe cookies
+});
+
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
