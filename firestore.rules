@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profile documents
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['id', 'email'])
+        && request.resource.data.id == userId;
+      allow delete: if isOwner(userId);
+
+      // User screening records subcollection - strictly scoped to the owner
+      match /screenings/{screeningId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['id', 'userId', 'classification', 'timestamp'])
+          && request.resource.data.userId == userId;
+        allow update: if isOwner(userId)
+          && request.resource.data.userId == userId;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Health check collection for connection testing
+    match /test/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

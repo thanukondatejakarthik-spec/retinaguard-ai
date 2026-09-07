@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information for healthcare staff and screening technicians",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User unique ID" },
+        "email": { "type": "string", "format": "email", "description": "User Google email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "User avatar profile URL" },
+        "role": { "type": "string", "enum": ["clinician", "technician", "ophthalmologist", "admin"], "description": "User role in the screening program" },
+        "facilityName": { "type": "string", "description": "Rural health center or clinic name" },
+        "createdAt": { "type": "string", "description": "Profile creation ISO timestamp" }
+      },
+      "required": ["id", "email"]
+    },
+    "ScreeningRecord": {
+      "title": "ScreeningRecord",
+      "description": "Retinal diabetic retinopathy screening record and AI evaluation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique screening record ID" },
+        "userId": { "type": "string", "description": "ID of the healthcare provider who performed the screening" },
+        "patientId": { "type": "string", "description": "Rural patient identifier or health card number" },
+        "patientName": { "type": "string", "description": "Patient full name or anonymous identifier" },
+        "patientAge": { "type": "number", "description": "Patient age in years" },
+        "eyeSide": { "type": "string", "enum": ["OD", "OS"], "description": "OD = Right Eye, OS = Left Eye" },
+        "imageStorageRef": { "type": "string", "description": "Storage bucket path or data reference" },
+        "imageUrl": { "type": "string", "description": "Compressed fundus image URL or data URI" },
+        "classification": { "type": "string", "enum": ["No apparent DR", "Mild", "Moderate", "Severe", "Proliferative DR"], "description": "ICDR classification result" },
+        "confidenceScore": { "type": "number", "description": "Model confidence score between 0 and 1" },
+        "icdrStage": { "type": "number", "description": "ICDR numeric stage 0 to 4" },
+        "detectedFindings": { "type": "string", "description": "Summary of clinical findings like microaneurysms, hemorrhages" },
+        "explanationNonTechnical": { "type": "string", "description": "Accessible non-technical explanation for patient and rural health worker" },
+        "gradCamAttentionSummary": { "type": "string", "description": "Description of the attention areas highlighted by Grad-CAM" },
+        "attentionPoints": { "type": "string", "description": "Serialized JSON of saliency coordinates or lesion bounding regions" },
+        "clinicalRecommendation": { "type": "string", "description": "General clinical guidance e.g. consult ophthalmologist in 1 month" },
+        "timestamp": { "type": "string", "description": "ISO timestamp of the screening" },
+        "bandwidthMode": { "type": "string", "description": "Network profile: low-bandwidth, standard, or offline-cached" },
+        "facilityLocation": { "type": "string", "description": "Primary healthcare center district or village" }
+      },
+      "required": ["id", "userId", "classification", "confidenceScore", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/screenings/{screeningId}": {
+      "schema": "ScreeningRecord",
+      "description": "Screening records belonging exclusively to the authenticated user"
+    }
+  }
+}
