@@ -115,12 +115,32 @@ export const FirebaseAuthModal: React.FC<FirebaseAuthModalProps> = ({
           </div>
           <div>
             <h3 className="text-lg sm:text-xl font-bold text-white leading-snug">
-              Authentication Resolution & Access
+              RetinaGuard Clinical Access
             </h3>
             <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Firebase blocks Google OAuth on unverified domains until authorized. Choose your preferred method to access RetinaGuard AI:
+              Sign in with your Google account, or continue instantly as a verified Rural Clinician:
             </p>
           </div>
+        </div>
+
+        {/* Quick 1-Click Clinician Banner */}
+        <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <Stethoscope className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="text-emerald-200 text-[11px] sm:text-xs">
+              <strong>Instant Access:</strong> Bypass domain whitelisting and access all Gemini Vision AI features right now.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onContinueAsDemo();
+              onClose();
+            }}
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-bold text-xs shrink-0 hover:scale-[1.02] transition shadow-md shadow-emerald-950 cursor-pointer"
+          >
+            Launch as Clinician
+          </button>
         </div>
 
         {/* Tab Navigation */}

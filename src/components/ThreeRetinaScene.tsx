@@ -26,23 +26,33 @@ export const ThreeRetinaScene: React.FC<ThreeRetinaSceneProps> = ({
     const width = container.clientWidth || 400;
     const height = container.clientHeight || 320;
 
-    // Scene, Camera, Renderer
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 4.2);
+    let renderer: THREE.WebGLRenderer | null = null;
+    let animationFrameId: number;
+    let resizeObserver: ResizeObserver | null = null;
+    let onMouseMove: (e: MouseEvent) => void = () => {};
+    let retinaTex: THREE.CanvasTexture | null = null;
+    let retinaGeo: THREE.SphereGeometry | null = null;
+    let scleraGeo: THREE.SphereGeometry | null = null;
+    let particleGeo: THREE.BufferGeometry | null = null;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    container.appendChild(renderer.domElement);
+    try {
+      // Scene, Camera, Renderer
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      camera.position.set(0, 0, 4.2);
 
-    // Group for entire eye structure
-    const eyeGroup = new THREE.Group();
-    scene.add(eyeGroup);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      container.appendChild(renderer.domElement);
 
-    // 1. Posterior Retinal Hemisphere (The fundus interior)
-    const retinaGeo = new THREE.SphereGeometry(1.6, 64, 32, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55);
+      // Group for entire eye structure
+      const eyeGroup = new THREE.Group();
+      scene.add(eyeGroup);
+
+      // 1. Posterior Retinal Hemisphere (The fundus interior)
+      retinaGeo = new THREE.SphereGeometry(1.6, 64, 32, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55);
     // Canvas texture for retinal microvasculature inside 3D globe
     const cvs = document.createElement('canvas');
     cvs.width = 1024;
@@ -218,11 +228,11 @@ export const ThreeRetinaScene: React.FC<ThreeRetinaSceneProps> = ({
     animate();
 
     // Resize handling
-    const resizeObserver = new ResizeObserver((entries) => {
+    resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const newWidth = entry.contentRect.width;
         const newHeight = entry.contentRect.height;
-        if (newWidth > 0 && newHeight > 0) {
+        if (newWidth > 0 && newHeight > 0 && camera && renderer) {
           camera.aspect = newWidth / newHeight;
           camera.updateProjectionMatrix();
           renderer.setSize(newWidth, newHeight);
@@ -233,18 +243,21 @@ export const ThreeRetinaScene: React.FC<ThreeRetinaSceneProps> = ({
     resizeObserver.observe(container);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       container.removeEventListener('mousemove', onMouseMove);
-      resizeObserver.disconnect();
-      if (renderer.domElement.parentNode === container) {
+      if (resizeObserver) resizeObserver.disconnect();
+      if (renderer && renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
-      renderer.dispose();
-      retinaTex.dispose();
-      retinaGeo.dispose();
-      scleraGeo.dispose();
-      particleGeo.dispose();
+      renderer?.dispose();
+      retinaTex?.dispose();
+      retinaGeo?.dispose();
+      scleraGeo?.dispose();
+      particleGeo?.dispose();
     };
+    } catch (err) {
+      console.warn('[ThreeRetinaScene] WebGL initialization notice:', err);
+    }
   }, []);
 
   const selectZone = (name: string, description: string) => {

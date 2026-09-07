@@ -109,7 +109,7 @@ export async function syncUserProfile(user: User): Promise<UserProfile> {
   try {
     await setDoc(userRef, profile, { merge: true });
   } catch (err) {
-    console.error('[Firebase] Failed to save user profile in Firestore:', err);
+    console.warn('[Firebase] Profile sync notice:', err);
   }
 
   return profile;
@@ -123,7 +123,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
       return snap.data() as UserProfile;
     }
   } catch (e) {
-    console.error('[Firebase] Error getting user profile:', e);
+    console.warn('[Firebase] Profile fetch notice:', e);
   }
   return null;
 }
@@ -269,11 +269,11 @@ export interface DemoClinician {
   isDemo: boolean;
 }
 
-export function createDemoClinician(): DemoClinician {
+export function createDemoClinician(customEmail?: string, customName?: string): DemoClinician {
   const demoClinician: DemoClinician = {
     uid: 'clinician-rural-phc-01',
-    email: 'dr.teja.karthik@phc-vision.org',
-    displayName: 'Dr. T. Karthik (Rural Medical Officer)',
+    email: customEmail || 'thanukondatejakarthik@gmail.com',
+    displayName: customName || 'Dr. Karthik (Vision Officer)',
     photoURL: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
     isDemo: true,
   };
@@ -310,7 +310,15 @@ export async function signInWithGoogle(): Promise<User> {
     clearDemoClinician();
     return result.user;
   } catch (error: any) {
-    console.error('[Firebase Auth Error Details]:', error);
+    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      console.info('[Firebase Auth] Sign-in popup was dismissed or closed by user.');
+      throw error;
+    }
+    if (error?.code === 'auth/unauthorized-domain') {
+      console.warn('[Firebase Auth] Domain authorization required in Firebase Console:', window?.location?.hostname);
+      throw error;
+    }
+    console.warn('[Firebase Auth Notice]:', error?.message || error);
     throw error;
   }
 }
@@ -326,7 +334,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
     clearDemoClinician();
     return result.user;
   } catch (error: any) {
-    console.error('[Firebase Auth Email Error]:', error);
+    console.warn('[Firebase Auth Email Notice]:', error?.message || error);
     throw error;
   }
 }
@@ -341,7 +349,7 @@ export async function signUpWithEmail(email: string, password: string, displayNa
     clearDemoClinician();
     return result.user;
   } catch (error: any) {
-    console.error('[Firebase Auth Register Error]:', error);
+    console.warn('[Firebase Auth Register Notice]:', error?.message || error);
     throw error;
   }
 }
