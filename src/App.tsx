@@ -10,6 +10,8 @@ import type {
 import { 
   subscribeToAuth, 
   signInWithGoogle, 
+  signInWithEmail,
+  signUpWithEmail,
   logoutUser, 
   getUserProfile, 
   saveUserProfile, 
@@ -153,6 +155,48 @@ export default function App() {
     }
   };
 
+  // Email Login Handler (Works on all domains without OAuth whitelist)
+  const handleEmailLogin = async (emailInput: string, passInput: string) => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    setAuthErrorCode(null);
+    try {
+      await signInWithEmail(emailInput, passInput);
+      setShowAuthModal(false);
+      setCurrentTab('dashboard');
+    } catch (err: any) {
+      console.error('Email Sign In failed:', err);
+      const code = err?.code || '';
+      const msg = err?.message || 'Email sign-in failed. Please verify email and password.';
+      setAuthErrorCode(code);
+      setAuthError(msg);
+      throw err;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Email Register Handler
+  const handleEmailRegister = async (emailInput: string, passInput: string, name?: string) => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    setAuthErrorCode(null);
+    try {
+      await signUpWithEmail(emailInput, passInput, name);
+      setShowAuthModal(false);
+      setCurrentTab('dashboard');
+    } catch (err: any) {
+      console.error('Email Register failed:', err);
+      const code = err?.code || '';
+      const msg = err?.message || 'Email registration failed.';
+      setAuthErrorCode(code);
+      setAuthError(msg);
+      throw err;
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   // Instant Clinician Demo Login (Bypasses Firebase Auth constraints in preview iframe)
   const handleLoginDemo = () => {
     const demoUser = createDemoClinician();
@@ -219,10 +263,17 @@ export default function App() {
 
       {/* Auth Error Notification Banner */}
       {authError && (
-        <div className="bg-rose-950/80 border-b border-rose-500/40 px-4 py-2 text-xs text-rose-200 flex items-center justify-between">
+        <div className="bg-rose-950/80 border-b border-rose-500/40 px-4 py-2.5 text-xs text-rose-200 flex items-center justify-between">
           <div className="flex items-center gap-2 max-w-7xl mx-auto w-full">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{authError}</span>
+            <span className="truncate">{authError}</span>
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className="ml-2 px-2.5 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-semibold text-[11px] underline cursor-pointer shrink-0"
+            >
+              Resolve / Sign In Options
+            </button>
           </div>
           <button 
             type="button"
@@ -278,6 +329,7 @@ export default function App() {
                 <RequireAuthBanner 
                   onLogin={handleGoogleLogin} 
                   onLoginDemo={handleLoginDemo} 
+                  onOpenAuthModal={() => setShowAuthModal(true)}
                   isLoggingIn={isLoggingIn} 
                 />
               )
@@ -298,6 +350,7 @@ export default function App() {
                 <RequireAuthBanner 
                   onLogin={handleGoogleLogin} 
                   onLoginDemo={handleLoginDemo} 
+                  onOpenAuthModal={() => setShowAuthModal(true)}
                   isLoggingIn={isLoggingIn} 
                 />
               )
@@ -316,6 +369,7 @@ export default function App() {
                 <RequireAuthBanner 
                   onLogin={handleGoogleLogin} 
                   onLoginDemo={handleLoginDemo} 
+                  onOpenAuthModal={() => setShowAuthModal(true)}
                   isLoggingIn={isLoggingIn} 
                 />
               )
@@ -393,6 +447,9 @@ export default function App() {
         errorMessage={authError}
         onContinueAsDemo={handleLoginDemo}
         onRetryGoogleLogin={handleGoogleLogin}
+        onEmailLogin={handleEmailLogin}
+        onEmailRegister={handleEmailRegister}
+        isLoggingIn={isLoggingIn}
       />
     </div>
   );
@@ -402,10 +459,12 @@ export default function App() {
 function RequireAuthBanner({ 
   onLogin, 
   onLoginDemo, 
+  onOpenAuthModal,
   isLoggingIn 
 }: { 
   onLogin: () => void; 
   onLoginDemo?: () => void; 
+  onOpenAuthModal?: () => void;
   isLoggingIn: boolean; 
 }) {
   return (
@@ -416,28 +475,40 @@ function RequireAuthBanner({
         </div>
         <h2 className="text-xl font-bold text-white">Authentication Required</h2>
         <p className="text-xs text-slate-400 leading-relaxed">
-          Sign in with your Google account, or continue in Clinician Demo Mode for instant access to retinal screening and AI vision tools.
+          Sign in with your Google account, use Email Login, or continue in Clinician Demo Mode for instant access to retinal screening and AI vision tools.
         </p>
-        <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-2">
-          {onLoginDemo && (
+        <div className="flex flex-col gap-2.5 w-full pt-2">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
+            {onLoginDemo && (
+              <button
+                type="button"
+                onClick={onLoginDemo}
+                className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition hover:scale-[1.02] cursor-pointer"
+              >
+                <Stethoscope className="w-4 h-4 text-slate-950" />
+                <span>Clinician Demo Mode</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={onLoginDemo}
-              className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition hover:scale-[1.02] cursor-pointer"
+              onClick={onLogin}
+              disabled={isLoggingIn}
+              className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
             >
-              <Stethoscope className="w-4 h-4 text-slate-950" />
-              <span>Clinician Demo Mode</span>
+              <LogIn className="w-4 h-4 text-slate-200" />
+              <span>{isLoggingIn ? 'Connecting...' : 'Google Sign-In'}</span>
+            </button>
+          </div>
+
+          {onOpenAuthModal && (
+            <button
+              type="button"
+              onClick={onOpenAuthModal}
+              className="w-full py-2 text-center text-xs text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+            >
+              Email Login or Firebase Domain Whitelist Guide
             </button>
           )}
-          <button
-            type="button"
-            onClick={onLogin}
-            disabled={isLoggingIn}
-            className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
-          >
-            <LogIn className="w-4 h-4 text-slate-200" />
-            <span>{isLoggingIn ? 'Connecting...' : 'Google Sign-In'}</span>
-          </button>
         </div>
       </div>
     </div>

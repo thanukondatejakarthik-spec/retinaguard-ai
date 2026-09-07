@@ -3,6 +3,9 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
   signOut, 
   onAuthStateChanged,
   type User 
@@ -58,6 +61,10 @@ export async function uploadRetinalImageToStorage(
   screeningId: string,
   base64DataUrl: string
 ): Promise<string> {
+  // If not authenticated or in offline demo mode, keep local base64 safely
+  if (!auth.currentUser) {
+    return base64DataUrl;
+  }
   try {
     const storageRef = ref(storage, `users/${userId}/screenings/${screeningId}.jpg`);
     await uploadString(storageRef, base64DataUrl, 'data_url');
@@ -65,7 +72,7 @@ export async function uploadRetinalImageToStorage(
     console.log('[Firebase Storage] Retinal scan persisted successfully:', downloadUrl);
     return downloadUrl;
   } catch (error) {
-    console.warn('[Firebase Storage] Image upload skipped or fallback applied:', error);
+    console.warn('[Firebase Storage] Image storage fallback to local data URI:', error);
     return base64DataUrl;
   }
 }
@@ -310,6 +317,33 @@ export async function signInWithGoogle(): Promise<User> {
 
 export async function loginWithGoogle(): Promise<User> {
   return signInWithGoogle();
+}
+
+export async function signInWithEmail(email: string, password: string): Promise<User> {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    await syncUserProfile(result.user);
+    clearDemoClinician();
+    return result.user;
+  } catch (error: any) {
+    console.error('[Firebase Auth Email Error]:', error);
+    throw error;
+  }
+}
+
+export async function signUpWithEmail(email: string, password: string, displayName?: string): Promise<User> {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName && result.user) {
+      await updateProfile(result.user, { displayName });
+    }
+    await syncUserProfile(result.user);
+    clearDemoClinician();
+    return result.user;
+  } catch (error: any) {
+    console.error('[Firebase Auth Register Error]:', error);
+    throw error;
+  }
 }
 
 export async function logoutUser(): Promise<void> {
