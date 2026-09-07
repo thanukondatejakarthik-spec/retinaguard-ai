@@ -131,24 +131,61 @@ export async function saveScreeningToFirestore(record: ScreeningRecord): Promise
   if (!record.userId) {
     throw new Error('User ID is required to persist screening record');
   }
-  const recordRef = doc(db, 'users', record.userId, 'screenings', record.id);
-  await setDoc(recordRef, record);
+
+  // Always persist locally to prevent any clinical screening data loss
+  try {
+    const localKey = `retinaguard_screenings_${record.userId}`;
+    const existing: ScreeningRecord[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+    const filtered = existing.filter((r) => r.id !== record.id);
+    localStorage.setItem(localKey, JSON.stringify([record, ...filtered].slice(0, 50)));
+  } catch (e) {
+    console.warn('[Storage] Local storage save notice:', e);
+  }
+
+  // Persist to Firestore cloud database if authenticated
+  if (auth.currentUser) {
+    try {
+      const recordRef = doc(db, 'users', record.userId, 'screenings', record.id);
+      await setDoc(recordRef, record);
+    } catch (err) {
+      console.warn('[Firebase] Cloud Firestore write notice (record saved locally):', err);
+    }
+  }
 }
 
 export async function fetchUserScreenings(userId: string): Promise<ScreeningRecord[]> {
   if (!userId) return [];
+  
+  let localRecords: ScreeningRecord[] = [];
+  try {
+    const localKey = `retinaguard_screenings_${userId}`;
+    localRecords = JSON.parse(localStorage.getItem(localKey) || '[]');
+  } catch (e) {}
+
+  if (!auth.currentUser) {
+    return localRecords;
+  }
+
   try {
     const screeningsCol = collection(db, 'users', userId, 'screenings');
     const q = query(screeningsCol, orderBy('timestamp', 'desc'));
     const snapshot = await getDocs(q);
-    const records: ScreeningRecord[] = [];
+    const cloudRecords: ScreeningRecord[] = [];
     snapshot.forEach(docSnap => {
-      records.push(docSnap.data() as ScreeningRecord);
+      cloudRecords.push(docSnap.data() as ScreeningRecord);
     });
-    return records;
+
+    // Merge cloud and local records deduplicating by ID
+    const merged = [...cloudRecords];
+    localRecords.forEach(lr => {
+      if (!merged.some(cr => cr.id === lr.id)) {
+        merged.push(lr);
+      }
+    });
+    return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   } catch (err) {
-    console.error('[Firebase] Error fetching user screenings:', err);
-    return [];
+    console.warn('[Firebase] Firestore query notice, returning local cache:', err);
+    return localRecords;
   }
 }
 
@@ -157,30 +194,101 @@ export function subscribeToUserScreenings(
   callback: (records: ScreeningRecord[]) => void
 ): () => void {
   if (!userId) return () => {};
-  const screeningsCol = collection(db, 'users', userId, 'screenings');
-  const q = query(screeningsCol, orderBy('timestamp', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const records: ScreeningRecord[] = [];
-    snapshot.forEach((docSnap) => {
-      records.push(docSnap.data() as ScreeningRecord);
+
+  // Immediately push local cache so user sees screening records without waiting
+  try {
+    const localKey = `retinaguard_screenings_${userId}`;
+    const localRecords = JSON.parse(localStorage.getItem(localKey) || '[]');
+    if (localRecords.length > 0) {
+      callback(localRecords);
+    }
+  } catch (e) {}
+
+  if (!auth.currentUser) {
+    return () => {};
+  }
+
+  try {
+    const screeningsCol = collection(db, 'users', userId, 'screenings');
+    const q = query(screeningsCol, orderBy('timestamp', 'desc'));
+    return onSnapshot(q, (snapshot) => {
+      const cloudRecords: ScreeningRecord[] = [];
+      snapshot.forEach((docSnap) => {
+        cloudRecords.push(docSnap.data() as ScreeningRecord);
+      });
+      callback(cloudRecords);
+    }, (err) => {
+      console.warn('[Firebase] Firestore snapshot listener notice, serving cached records:', err);
+      fetchUserScreenings(userId).then(callback);
     });
-    callback(records);
-  }, (err) => {
-    console.warn('[Firebase] Snapshot error, falling back to fetch:', err);
-    fetchUserScreenings(userId).then(callback);
-  });
+  } catch (e) {
+    return () => {};
+  }
 }
 
 export async function deleteScreeningFromFirestore(userId: string, screeningId: string): Promise<void> {
   if (!userId || !screeningId) return;
-  const recordRef = doc(db, 'users', userId, 'screenings', screeningId);
-  await deleteDoc(recordRef);
+
+  // Clean from local storage
+  try {
+    const localKey = `retinaguard_screenings_${userId}`;
+    const existing: ScreeningRecord[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+    localStorage.setItem(localKey, JSON.stringify(existing.filter(r => r.id !== screeningId)));
+  } catch (e) {}
+
+  if (auth.currentUser) {
+    try {
+      const recordRef = doc(db, 'users', userId, 'screenings', screeningId);
+      await deleteDoc(recordRef);
+    } catch (err) {
+      console.warn('[Firebase] Failed to delete cloud document:', err);
+    }
+  }
 }
 
 export async function deleteScreeningRecord(recordId: string): Promise<void> {
-  if (auth.currentUser) {
-    await deleteScreeningFromFirestore(auth.currentUser.uid, recordId);
+  const currentUid = auth.currentUser?.uid || getSavedDemoClinician()?.uid;
+  if (currentUid) {
+    await deleteScreeningFromFirestore(currentUid, recordId);
   }
+}
+
+// Demo Clinician User Support for Instant Access in Rural/Offline or OAuth-Restricted Environments
+export interface DemoClinician {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  isDemo: boolean;
+}
+
+export function createDemoClinician(): DemoClinician {
+  const demoClinician: DemoClinician = {
+    uid: 'clinician-rural-phc-01',
+    email: 'dr.teja.karthik@phc-vision.org',
+    displayName: 'Dr. T. Karthik (Rural Medical Officer)',
+    photoURL: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80',
+    isDemo: true,
+  };
+  try {
+    localStorage.setItem('retinaguard_demo_clinician', JSON.stringify(demoClinician));
+  } catch (e) {}
+  return demoClinician;
+}
+
+export function getSavedDemoClinician(): DemoClinician | null {
+  try {
+    const raw = localStorage.getItem('retinaguard_demo_clinician');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function clearDemoClinician(): void {
+  try {
+    localStorage.removeItem('retinaguard_demo_clinician');
+  } catch (e) {}
 }
 
 // Auth helpers
@@ -189,9 +297,15 @@ export function subscribeToAuth(callback: (user: User | null) => void): () => vo
 }
 
 export async function signInWithGoogle(): Promise<User> {
-  const result = await signInWithPopup(auth, googleProvider);
-  await syncUserProfile(result.user);
-  return result.user;
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    await syncUserProfile(result.user);
+    clearDemoClinician();
+    return result.user;
+  } catch (error: any) {
+    console.error('[Firebase Auth Error Details]:', error);
+    throw error;
+  }
 }
 
 export async function loginWithGoogle(): Promise<User> {
@@ -199,7 +313,10 @@ export async function loginWithGoogle(): Promise<User> {
 }
 
 export async function logoutUser(): Promise<void> {
-  await signOut(auth);
+  clearDemoClinician();
+  if (auth.currentUser) {
+    await signOut(auth);
+  }
 }
 
 export { onAuthStateChanged };

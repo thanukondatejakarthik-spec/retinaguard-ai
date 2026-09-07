@@ -4,7 +4,8 @@ import type {
   UserProfile, 
   ScreeningRecord, 
   SupportedLanguage, 
-  BandwidthMode 
+  BandwidthMode,
+  AppUser
 } from './types';
 import { 
   subscribeToAuth, 
@@ -13,7 +14,10 @@ import {
   getUserProfile, 
   saveUserProfile, 
   subscribeToUserScreenings, 
-  deleteScreeningRecord 
+  deleteScreeningRecord,
+  createDemoClinician,
+  getSavedDemoClinician,
+  clearDemoClinician
 } from './lib/firebase';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
@@ -22,17 +26,34 @@ import { ScreeningWorkflow } from './components/ScreeningWorkflow';
 import { ScreeningHistory } from './components/ScreeningHistory';
 import { AdminTelemetry } from './components/AdminTelemetry';
 import { ExplainableHeatmapViewer } from './components/ExplainableHeatmapViewer';
-import { AlertTriangle, Lock, Eye, LogIn, Heart, ShieldCheck, X } from 'lucide-react';
+import { FirebaseAuthModal } from './components/FirebaseAuthModal';
+import { AlertTriangle, Lock, Eye, LogIn, Heart, ShieldCheck, X, Stethoscope } from 'lucide-react';
 import { translations } from './data/i18n';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'landing' | 'dashboard' | 'screening' | 'history' | 'telemetry'>('landing');
-  const [user, setUser] = useState<User | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<AppUser | User | null>(() => getSavedDemoClinician());
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    const savedDemo = getSavedDemoClinician();
+    if (savedDemo) {
+      return {
+        id: savedDemo.uid,
+        email: savedDemo.email,
+        displayName: savedDemo.displayName,
+        photoURL: savedDemo.photoURL,
+        role: 'clinician',
+        facilityName: 'Primary Health Center (Rural Vision Hub)',
+        createdAt: new Date().toISOString()
+      };
+    }
+    return null;
+  });
   const [screenings, setScreenings] = useState<ScreeningRecord[]>([]);
   const [isLoadingAuth, setIsLoadingAuth] = useState<boolean>(true);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
 
   // Internationalization and Low-Bandwidth Mode
   const [language, setLanguage] = useState<SupportedLanguage>('en');
@@ -46,10 +67,10 @@ export default function App() {
   // Subscribe to real Firebase Google Authentication State
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (currentUser) => {
-      setUser(currentUser);
       setIsLoadingAuth(false);
 
       if (currentUser) {
+        setUser(currentUser);
         // Load or create Firestore user profile
         try {
           let profile = await getUserProfile(currentUser.uid);
@@ -70,10 +91,26 @@ export default function App() {
           console.error('Error loading user profile from Firestore:', e);
         }
       } else {
-        setUserProfile(null);
-        setScreenings([]);
-        if (currentTab === 'dashboard' || currentTab === 'screening' || currentTab === 'history') {
-          setCurrentTab('landing');
+        // If not authenticated via Google, check if demo clinician is active
+        const savedDemo = getSavedDemoClinician();
+        if (savedDemo) {
+          setUser(savedDemo);
+          setUserProfile({
+            id: savedDemo.uid,
+            email: savedDemo.email,
+            displayName: savedDemo.displayName,
+            photoURL: savedDemo.photoURL,
+            role: 'clinician',
+            facilityName: 'Primary Health Center (Rural Vision Hub)',
+            createdAt: new Date().toISOString()
+          });
+        } else {
+          setUser(null);
+          setUserProfile(null);
+          setScreenings([]);
+          if (currentTab === 'dashboard' || currentTab === 'screening' || currentTab === 'history') {
+            setCurrentTab('landing');
+          }
         }
       }
     });
@@ -81,7 +118,7 @@ export default function App() {
     return () => unsubscribe();
   }, [currentTab]);
 
-  // Real-time Firestore sync of screening records for authenticated user
+  // Real-time sync of screening records for authenticated or demo user
   useEffect(() => {
     if (!user) {
       setScreenings([]);
@@ -99,30 +136,61 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
     setAuthError(null);
+    setAuthErrorCode(null);
     try {
       await signInWithGoogle();
+      setShowAuthModal(false);
       setCurrentTab('dashboard');
     } catch (err: any) {
       console.error('Google Sign In failed:', err);
-      setAuthError(err?.message || 'Google authentication failed. Please try again.');
+      const code = err?.code || '';
+      const msg = err?.message || 'Google authentication failed. Please try again.';
+      setAuthErrorCode(code);
+      setAuthError(msg);
+      setShowAuthModal(true);
     } finally {
       setIsLoggingIn(false);
     }
   };
 
+  // Instant Clinician Demo Login (Bypasses Firebase Auth constraints in preview iframe)
+  const handleLoginDemo = () => {
+    const demoUser = createDemoClinician();
+    setUser(demoUser);
+    setUserProfile({
+      id: demoUser.uid,
+      email: demoUser.email,
+      displayName: demoUser.displayName,
+      photoURL: demoUser.photoURL,
+      role: 'clinician',
+      facilityName: 'Primary Health Center (Rural Vision Hub)',
+      createdAt: new Date().toISOString()
+    });
+    setAuthError(null);
+    setAuthErrorCode(null);
+    setShowAuthModal(false);
+    setCurrentTab('dashboard');
+  };
+
   // Logout Handler
   const handleLogout = async () => {
     try {
+      clearDemoClinician();
       await logoutUser();
+      setUser(null);
+      setUserProfile(null);
+      setScreenings([]);
       setCurrentTab('landing');
     } catch (err) {
       console.error('Logout error:', err);
+      setUser(null);
+      setCurrentTab('landing');
     }
   };
 
-  // Delete screening from Firestore
+  // Delete screening from Firestore / Local cache
   const handleDeleteScreening = async (recordId: string) => {
-    if (window.confirm('Are you sure you want to permanently delete this screening record from Firestore?')) {
+    if (window.confirm('Are you sure you want to permanently delete this screening record?')) {
       try {
         await deleteScreeningRecord(recordId);
       } catch (err) {
@@ -144,6 +212,7 @@ export default function App() {
         bandwidthMode={bandwidthMode}
         setBandwidthMode={setBandwidthMode}
         onLogin={handleGoogleLogin}
+        onLoginDemo={handleLoginDemo}
         onLogout={handleLogout}
         isLoggingIn={isLoggingIn}
       />
@@ -181,6 +250,7 @@ export default function App() {
               <LandingPage
                 language={language}
                 onLogin={handleGoogleLogin}
+                onLoginDemo={handleLoginDemo}
                 onExploreWorkflow={() => {
                   const element = document.getElementById('workflow');
                   if (element) {
@@ -205,7 +275,11 @@ export default function App() {
                   language={language}
                 />
               ) : (
-                <RequireAuthBanner onLogin={handleGoogleLogin} isLoggingIn={isLoggingIn} />
+                <RequireAuthBanner 
+                  onLogin={handleGoogleLogin} 
+                  onLoginDemo={handleLoginDemo} 
+                  isLoggingIn={isLoggingIn} 
+                />
               )
             )}
 
@@ -221,7 +295,11 @@ export default function App() {
                   bandwidthMode={bandwidthMode}
                 />
               ) : (
-                <RequireAuthBanner onLogin={handleGoogleLogin} isLoggingIn={isLoggingIn} />
+                <RequireAuthBanner 
+                  onLogin={handleGoogleLogin} 
+                  onLoginDemo={handleLoginDemo} 
+                  isLoggingIn={isLoggingIn} 
+                />
               )
             )}
 
@@ -235,7 +313,11 @@ export default function App() {
                   language={language}
                 />
               ) : (
-                <RequireAuthBanner onLogin={handleGoogleLogin} isLoggingIn={isLoggingIn} />
+                <RequireAuthBanner 
+                  onLogin={handleGoogleLogin} 
+                  onLoginDemo={handleLoginDemo} 
+                  isLoggingIn={isLoggingIn} 
+                />
               )
             )}
 
@@ -302,12 +384,30 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Firebase Authentication Troubleshooting & Resolution Modal */}
+      <FirebaseAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        errorCode={authErrorCode}
+        errorMessage={authError}
+        onContinueAsDemo={handleLoginDemo}
+        onRetryGoogleLogin={handleGoogleLogin}
+      />
     </div>
   );
 }
 
 // Protected Route Shield Banner for unauthenticated attempts
-function RequireAuthBanner({ onLogin, isLoggingIn }: { onLogin: () => void; isLoggingIn: boolean }) {
+function RequireAuthBanner({ 
+  onLogin, 
+  onLoginDemo, 
+  isLoggingIn 
+}: { 
+  onLogin: () => void; 
+  onLoginDemo?: () => void; 
+  isLoggingIn: boolean; 
+}) {
   return (
     <div className="flex-1 flex items-center justify-center p-6 text-center">
       <div className="max-w-md p-8 rounded-3xl bg-slate-900/80 border border-slate-800 backdrop-blur-2xl shadow-2xl flex flex-col items-center gap-4">
@@ -316,17 +416,29 @@ function RequireAuthBanner({ onLogin, isLoggingIn }: { onLogin: () => void; isLo
         </div>
         <h2 className="text-xl font-bold text-white">Authentication Required</h2>
         <p className="text-xs text-slate-400 leading-relaxed">
-          Please sign in with your verified Google account to access clinical patient screening, Firestore records, and tele-ophthalmology triage tools.
+          Sign in with your Google account, or continue in Clinician Demo Mode for instant access to retinal screening and AI vision tools.
         </p>
-        <button
-          type="button"
-          onClick={onLogin}
-          disabled={isLoggingIn}
-          className="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition hover:scale-[1.02] cursor-pointer"
-        >
-          <LogIn className="w-4 h-4 text-slate-950" />
-          <span>{isLoggingIn ? 'Connecting...' : 'Sign in with Google'}</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full pt-2">
+          {onLoginDemo && (
+            <button
+              type="button"
+              onClick={onLoginDemo}
+              className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-400 to-sky-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-500/40 transition hover:scale-[1.02] cursor-pointer"
+            >
+              <Stethoscope className="w-4 h-4 text-slate-950" />
+              <span>Clinician Demo Mode</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onLogin}
+            disabled={isLoggingIn}
+            className="w-full sm:flex-1 py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 flex items-center justify-center gap-2 transition disabled:opacity-50 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4 text-slate-200" />
+            <span>{isLoggingIn ? 'Connecting...' : 'Google Sign-In'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

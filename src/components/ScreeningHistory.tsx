@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { ScreeningRecord, ICDRClassification, SupportedLanguage } from '../types';
+import type { ScreeningRecord, ICDRClassification, SupportedLanguage, AppUser } from '../types';
 import type { User } from 'firebase/auth';
 import { 
   Search, 
@@ -20,7 +20,7 @@ import { generateScreeningPdfReport } from '../lib/pdfReport';
 import { translations } from '../data/i18n';
 
 interface ScreeningHistoryProps {
-  user: User;
+  user: User | AppUser;
   screenings: ScreeningRecord[];
   onDeleteScreening: (recordId: string) => void;
   language: SupportedLanguage;

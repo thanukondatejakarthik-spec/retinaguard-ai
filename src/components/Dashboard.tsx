@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ScreeningRecord, UserProfile, SupportedLanguage } from '../types';
+import type { ScreeningRecord, UserProfile, SupportedLanguage, AppUser } from '../types';
 import type { User } from 'firebase/auth';
 import { 
   Eye, 
@@ -23,7 +23,7 @@ import { generateScreeningPdfReport } from '../lib/pdfReport';
 import { translations } from '../data/i18n';
 
 interface DashboardProps {
-  user: User;
+  user: User | AppUser;
   userProfile: UserProfile | null;
   screenings: ScreeningRecord[];
   onStartScreening: () => void;

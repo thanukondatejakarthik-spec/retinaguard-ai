@@ -4,7 +4,8 @@ import type {
   EyeSide, 
   ICDRClassification, 
   SupportedLanguage, 
-  BandwidthMode 
+  BandwidthMode,
+  AppUser
 } from '../types';
 import type { User } from 'firebase/auth';
 import { 
@@ -35,7 +36,7 @@ import { saveScreeningToFirestore, uploadRetinalImageToStorage } from '../lib/fi
 import { translations } from '../data/i18n';
 
 interface ScreeningWorkflowProps {
-  user: User;
+  user: User | AppUser;
   onScreeningComplete: (record: ScreeningRecord) => void;
   language: SupportedLanguage;
   bandwidthMode: BandwidthMode;

@@ -62,6 +62,14 @@ export interface ScreeningRecord {
   safetyDisclaimer: string;
 }
 
+export interface AppUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+  isDemo?: boolean;
+}
+
 export interface UserProfile {
   id: string;
   email: string;

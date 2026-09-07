@@ -33,7 +33,8 @@ service cloud.firestore {
 
     // Health check collection for connection testing
     match /test/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
   }
 }

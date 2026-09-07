@@ -1,19 +1,20 @@
 import React from 'react';
-import { Eye, Shield, Globe, Wifi, WifiOff, LogIn, LogOut, Activity, FileText, User as UserIcon } from 'lucide-react';
-import type { SupportedLanguage, BandwidthMode, UserProfile } from '../types';
+import { Eye, Shield, Globe, Wifi, WifiOff, LogIn, LogOut, Activity, FileText, User as UserIcon, Stethoscope } from 'lucide-react';
+import type { SupportedLanguage, BandwidthMode, UserProfile, AppUser } from '../types';
 import type { User } from 'firebase/auth';
 import { translations } from '../data/i18n';
 
 interface NavbarProps {
   currentTab: 'landing' | 'dashboard' | 'screening' | 'history' | 'telemetry';
   setCurrentTab: (tab: 'landing' | 'dashboard' | 'screening' | 'history' | 'telemetry') => void;
-  user: User | null;
+  user: AppUser | User | null;
   userProfile: UserProfile | null;
   language: SupportedLanguage;
   setLanguage: (lang: SupportedLanguage) => void;
   bandwidthMode: BandwidthMode;
   setBandwidthMode: (mode: BandwidthMode) => void;
   onLogin: () => void;
+  onLoginDemo?: () => void;
   onLogout: () => void;
   isLoggingIn: boolean;
 }
@@ -28,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   bandwidthMode,
   setBandwidthMode,
   onLogin,
+  onLoginDemo,
   onLogout,
   isLoggingIn
 }) => {
@@ -184,13 +186,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Real Google Account Auth */}
+          {/* Real Google Account Auth or Clinician Mode */}
           {user ? (
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex flex-col items-end text-right">
-                <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
-                  {user.displayName || 'Healthcare Worker'}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
+                    {user.displayName || 'Healthcare Specialist'}
+                  </span>
+                  {user.isDemo && (
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                      DEMO
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-cyan-400 font-mono">
                   {userProfile?.facilityName || 'Rural PHC'}
                 </span>
@@ -211,21 +220,35 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={onLogout}
                 className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition"
-                title="Sign out of Google Account"
+                title="Sign out"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={onLogin}
-              disabled={isLoggingIn}
-              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 text-slate-950 font-semibold text-xs flex items-center gap-1.5 hover:shadow-lg hover:shadow-cyan-500/25 transition disabled:opacity-50 cursor-pointer"
-            >
-              <LogIn className="w-3.5 h-3.5 text-slate-950" />
-              <span>{isLoggingIn ? 'Connecting...' : t.nav.signIn}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onLoginDemo && (
+                <button
+                  type="button"
+                  onClick={onLoginDemo}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-950/60 font-semibold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  title="Instant access as rural medical officer without Google sign-in"
+                >
+                  <Stethoscope className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="hidden sm:inline">Clinician Demo</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={onLogin}
+                disabled={isLoggingIn}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 text-slate-950 font-semibold text-xs flex items-center gap-1.5 hover:shadow-lg hover:shadow-cyan-500/25 transition disabled:opacity-50 cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5 text-slate-950" />
+                <span>{isLoggingIn ? 'Connecting...' : t.nav.signIn}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
